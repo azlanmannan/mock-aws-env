@@ -1,0 +1,782 @@
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
+  "Description"	: "VPC Architecture template.",
+
+  "Metadata" : {
+    "AWS::CloudFormation::Interface" : {
+    "ParameterGroups" : [
+      {
+        "Label"				: { "default" : "Resource Tagging" },
+        "Parameters"			: [ "OwnerService", "StackEnv" ]
+      }
+    ],
+    "ParameterLabels" : {
+        "OwnerService"			: { "default" : "Service name" },
+        "StackEnv"			: { "default" : "Environment name" }
+      }
+    }
+  },
+
+  "Parameters" : {
+    "OwnerService" : {
+        "Type"				: "String",
+        "Default"			: "cloud",
+        "Description"			: "Owner or service name. (Use lowercase, no spaces, dashes ok.)",
+        "AllowedPattern"		: "[-a-z0-9]*",
+        "ConstraintDescription"		: "Must be lowercase, no spaces, dashes ok."
+    },
+    "StackEnv" : {
+        "Type"				: "String",
+        "Default"			: "dev",
+        "Description"			: "Environment: prod, stage, dev.. (Use lowercase, no spaces, dashes ok.)",
+        "AllowedPattern"		: "[-a-z0-9]*",
+        "ConstraintDescription"		: "Must be lowercase, no spaces, dashes ok."
+    }
+  },
+
+  "Mappings" : {
+
+    "RegionMap": {
+        "us-east-1"			: { "VPC"  : "10.10.228.0/24",
+                                            "Pub1" : "10.10.228.0/26",
+                                            "Pub2" : "10.10.228.64/26",
+                                            "Pri1" : "10.10.228.128/26",
+                                            "Pri2" : "10.10.228.192/26",
+                                            "Abbr" : "ue1"
+                                          },
+        "eu-west-1"			: { "VPC"  : "10.20.228.0/24",
+                                            "Pub1" : "10.20.228.0/26",
+                                            "Pub2" : "10.20.228.64/26",
+                                            "Pri1" : "10.20.228.128/26",
+                                            "Pri2" : "10.20.228.192/26",
+                                            "Abbr" : "ew1"
+                                          },
+        "ap-northeast-1"		: { "VPC"  : "10.30.228.0/24",
+                                            "Pub1" : "10.30.228.0/26",
+                                            "Pub2" : "10.30.228.64/26",
+                                            "Pri1" : "10.30.228.128/26",
+                                            "Pri2" : "10.30.228.192/26",
+                                            "Abbr" : "an1"
+                                          },
+        "us-west-2"			: { "VPC"  : "10.40.228.0/24",
+                                            "Pub1" : "10.40.228.0/26",
+                                            "Pub2" : "10.40.228.64/26",
+                                            "Pri1" : "10.40.228.128/26",
+                                            "Pri2" : "10.40.228.192/26",
+                                            "Abbr" : "uw2"
+                                          }
+    }
+  },
+
+  "Resources" : {
+    "ec2VPC" : {
+      "Type" : "AWS::EC2::VPC",
+        "Properties" : {
+          "CidrBlock"			: { "Fn::FindInMap" : [ "RegionMap", { "Ref" : "AWS::Region" }, "VPC" ] },
+          "EnableDnsSupport"		: "true",
+          "EnableDnsHostnames"		: "true",
+          "InstanceTenancy"		: "default",
+        "Tags": [
+            {
+                "Key"			: "Name",
+                "Value"			: {
+						"Fn::Join" : [
+						"-",
+						  [
+						    { "Ref" : "OwnerService" },
+						    { "Ref" : "StackEnv" },
+						     "vpc",
+						    { "Fn::FindInMap" : [ "RegionMap", { "Ref" : "AWS::Region" }, "Abbr" ] }
+						  ]
+						]
+					}
+            }
+        ]
+      }
+    },
+
+    "ec2InternetGW" : {
+      "Type" : "AWS::EC2::InternetGateway",
+        "Properties" : {
+        "Tags": [
+            {
+                "Key"			: "Name",
+                "Value"			: {
+						"Fn::Join" : [
+						"-",
+						  [
+						    { "Ref" : "OwnerService" },
+						    { "Ref" : "StackEnv" },
+						     "igw",
+						    { "Fn::FindInMap" : [ "RegionMap", { "Ref" : "AWS::Region" }, "Abbr" ] }
+						  ]
+						]
+					}
+            }
+        ]
+      }
+    },
+
+    "ec2AttachGateway" : {
+      "Type" : "AWS::EC2::VPCGatewayAttachment",
+        "Properties" : {
+          "VpcId"			: { "Ref" : "ec2VPC" },
+          "InternetGatewayId"		: { "Ref" : "ec2InternetGW" }
+      }
+    },
+
+    "ec2PublicSubnetAZ1" : {
+      "Type" : "AWS::EC2::Subnet",
+        "Properties" : {
+          "VpcId"			: { "Ref" : "ec2VPC" },
+          "CidrBlock"			: { "Fn::FindInMap" : [ "RegionMap", { "Ref" : "AWS::Region" }, "Pub1" ] },
+          "AvailabilityZone"		: { "Fn::Select" : [ "0", { "Fn::GetAZs": "" } ] },
+        "Tags": [
+            {
+                "Key"			: "Name",
+                "Value"			: {
+						"Fn::Join" : [
+						"-",
+						  [
+						    { "Ref" : "OwnerService" },
+						    { "Ref" : "StackEnv" },
+						     "public-az1",
+						    { "Fn::FindInMap" : [ "RegionMap", { "Ref" : "AWS::Region" }, "Abbr" ] }
+						  ]
+						]
+					}
+            }
+        ]
+      }
+    },
+    "ec2PublicSubnetAZ2" : {
+      "Type" : "AWS::EC2::Subnet",
+        "Properties" : {
+          "VpcId"			: { "Ref" : "ec2VPC" },
+          "CidrBlock"			: { "Fn::FindInMap" : [ "RegionMap", { "Ref" : "AWS::Region" }, "Pub2" ] },
+          "AvailabilityZone"		: { "Fn::Select" : [ "1", { "Fn::GetAZs": "" } ] },
+        "Tags": [
+            {
+                "Key"			: "Name",
+                "Value"			: {
+						"Fn::Join" : [
+						"-",
+						  [
+						    { "Ref" : "OwnerService" },
+						    { "Ref" : "StackEnv" },
+						     "public-az2",
+						    { "Fn::FindInMap" : [ "RegionMap", { "Ref" : "AWS::Region" }, "Abbr" ] }
+						  ]
+						]
+					}
+            }
+        ]
+      }
+    },
+
+    "ec2PrivateSubnetAZ1" : {
+      "Type" : "AWS::EC2::Subnet",
+        "Properties" : {
+          "VpcId"			: { "Ref" : "ec2VPC" },
+          "CidrBlock"			: { "Fn::FindInMap" : [ "RegionMap", { "Ref" : "AWS::Region" }, "Pri1" ] },
+          "AvailabilityZone"		: { "Fn::Select" : [ "0", { "Fn::GetAZs": "" } ] },
+        "Tags": [
+            {
+                "Key"			: "Name",
+                "Value"			: {
+						"Fn::Join" : [
+						"-",
+						  [
+						    { "Ref" : "OwnerService" },
+						    { "Ref" : "StackEnv" },
+						     "private-az1",
+						    { "Fn::FindInMap" : [ "RegionMap", { "Ref" : "AWS::Region" }, "Abbr" ] }
+						  ]
+						]
+					}
+            }
+        ]
+      }
+    },
+    "ec2PrivateSubnetAZ2" : {
+      "Type" : "AWS::EC2::Subnet",
+        "Properties" : {
+          "VpcId"			: { "Ref" : "ec2VPC" },
+          "CidrBlock"			: { "Fn::FindInMap" : [ "RegionMap", { "Ref" : "AWS::Region" }, "Pri2" ] },
+          "AvailabilityZone"		: { "Fn::Select" : [ "1", { "Fn::GetAZs": "" } ] },
+        "Tags": [
+            {
+                "Key"			: "Name",
+                "Value"			: {
+						"Fn::Join" : [
+						"-",
+						  [
+						    { "Ref" : "OwnerService" },
+						    { "Ref" : "StackEnv" },
+						     "private-az2",
+						    { "Fn::FindInMap" : [ "RegionMap", { "Ref" : "AWS::Region" }, "Abbr" ] }
+						  ]
+						]
+					}
+            }
+        ]
+      }
+    },
+
+    "ec2PublicRouteTable" : {
+      "Type" : "AWS::EC2::RouteTable",
+        "Properties" : {
+          "VpcId"			: { "Ref" : "ec2VPC" },
+        "Tags": [
+            {
+                "Key"			: "Name",
+                "Value"			: {
+						"Fn::Join" : [
+						"-",
+						  [
+						    { "Ref" : "OwnerService" },
+						    { "Ref" : "StackEnv" },
+						     "public-rtb",
+						    { "Fn::FindInMap" : [ "RegionMap", { "Ref" : "AWS::Region" }, "Abbr" ] }
+						  ]
+						]
+					}
+            }
+        ]
+      }
+    },
+
+    "ec2PrivateRouteTableAZ1" : {
+      "Type" : "AWS::EC2::RouteTable",
+        "Properties" : {
+          "VpcId"			: { "Ref" : "ec2VPC" },
+        "Tags": [
+            {
+                "Key"			: "Name",
+                "Value"			: {
+						"Fn::Join" : [
+						"-",
+						  [
+						    { "Ref" : "OwnerService" },
+						    { "Ref" : "StackEnv" },
+						     "private-rtb1",
+						    { "Fn::FindInMap" : [ "RegionMap", { "Ref" : "AWS::Region" }, "Abbr" ] }
+						  ]
+						]
+					}
+            }
+        ]
+      }
+    },
+    "ec2PrivateRouteTableAZ2" : {
+      "Type" : "AWS::EC2::RouteTable",
+        "Properties" : {
+          "VpcId"			: { "Ref" : "ec2VPC" },
+        "Tags": [
+            {
+                "Key"			: "Name",
+                "Value"			: {
+						"Fn::Join" : [
+						"-",
+						  [
+						    { "Ref" : "OwnerService" },
+						    { "Ref" : "StackEnv" },
+						     "private-rtb2",
+						    { "Fn::FindInMap" : [ "RegionMap", { "Ref" : "AWS::Region" }, "Abbr" ] }
+						  ]
+						]
+					}
+            }
+        ]
+      }
+    },
+
+    "ec2PubDefaultRoute" : {
+      "Type" : "AWS::EC2::Route",
+        "Properties" : {
+          "RouteTableId"		: { "Ref" : "ec2PublicRouteTable" },
+          "DestinationCidrBlock"	: "0.0.0.0/0",
+          "GatewayId"			: { "Ref" : "ec2InternetGW" }
+      }
+    },
+
+    "ec2PriDefaultRouteAZ1" : {
+      "Type" : "AWS::EC2::Route",
+      "DependsOn" : [ "ec2GatewayNAT1" ],
+        "Properties" : {
+          "RouteTableId"		: { "Ref" : "ec2PrivateRouteTableAZ1" },
+          "DestinationCidrBlock"	: "0.0.0.0/0",
+          "NatGatewayId"                : { "Ref" : "ec2GatewayNAT1" }
+      }
+    },
+    "ec2PriDefaultRouteAZ2" : {
+      "Type" : "AWS::EC2::Route",
+      "DependsOn" : [ "ec2GatewayNAT2" ],
+        "Properties" : {
+          "RouteTableId"		: { "Ref" : "ec2PrivateRouteTableAZ2" },
+          "DestinationCidrBlock"	: "0.0.0.0/0",
+          "NatGatewayId"                : { "Ref" : "ec2GatewayNAT2" }
+      }
+    },
+
+    "ec2PublicSubnetRouteTableAssocAZ1" : {
+      "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+        "Properties" : {
+          "SubnetId"			: { "Ref" : "ec2PublicSubnetAZ1" },
+          "RouteTableId"		: { "Ref" : "ec2PublicRouteTable" }
+      }
+    },
+    "ec2PublicSubnetRouteTableAssocAZ2" : {
+      "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+        "Properties" : {
+          "SubnetId"			: { "Ref" : "ec2PublicSubnetAZ2" },
+          "RouteTableId"		: { "Ref" : "ec2PublicRouteTable" }
+      }
+    },
+
+    "ec2PrivateSubnetRouteTableAssocAZ1" : {
+      "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+        "Properties" : {
+          "SubnetId"			: { "Ref" : "ec2PrivateSubnetAZ1" },
+          "RouteTableId"		: { "Ref" : "ec2PrivateRouteTableAZ1" }
+      }
+    },
+    "ec2PrivateSubnetRouteTableAssocAZ2" : {
+      "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+        "Properties" : {
+          "SubnetId"			: { "Ref" : "ec2PrivateSubnetAZ2" },
+          "RouteTableId"		: { "Ref" : "ec2PrivateRouteTableAZ2" }
+      }
+    },
+
+    "ec2PublicSubnetNetworkAcl" : {
+      "Type" : "AWS::EC2::NetworkAcl",
+        "Properties" : {
+          "VpcId"			: { "Ref" : "ec2VPC" },
+        "Tags": [
+            {
+                "Key"			: "Name",
+                "Value"			: {
+						"Fn::Join" : [
+						"-",
+						  [
+						    { "Ref" : "OwnerService" },
+						    { "Ref" : "StackEnv" },
+						     "public-acl",
+						    { "Fn::FindInMap" : [ "RegionMap", { "Ref" : "AWS::Region" }, "Abbr" ] }
+						  ]
+						]
+					}
+            }
+        ]
+      }
+    },
+
+    "ec2PublicSubnetAclEntryIn100" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+        "Properties" : {
+          "NetworkAclId"		: { "Ref" : "ec2PublicSubnetNetworkAcl" },
+          "RuleNumber"			: "100",
+          "Protocol"			: "-1",
+          "RuleAction"			: "allow",
+          "Egress"			: "false",
+          "CidrBlock"			: { "Fn::FindInMap" : [ "RegionMap", { "Ref" : "AWS::Region" }, "VPC" ] }
+        }
+    },
+    "ec2PublicSubnetAclEntryIn200" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+        "Properties" : {
+          "NetworkAclId"		: { "Ref" : "ec2PublicSubnetNetworkAcl" },
+          "RuleNumber"			: "200",
+          "Protocol"			: "6",
+          "PortRange"			: { "From" : "443", "To" : "443" },
+          "RuleAction"			: "allow",
+          "Egress"			: "false",
+          "CidrBlock"			: "0.0.0.0/0"
+        }
+    },
+    "ec2PublicSubnetAclEntryIn300" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+        "Properties" : {
+          "NetworkAclId"		: { "Ref" : "ec2PublicSubnetNetworkAcl" },
+          "RuleNumber"			: "300",
+          "Protocol"			: "6",
+          "PortRange"			: { "From" : "80", "To" : "80" },
+          "RuleAction"			: "allow",
+          "Egress"			: "false",
+          "CidrBlock"			: "0.0.0.0/0"
+        }
+    },
+    "ec2PublicSubnetAclEntryIn400" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+        "Properties" : {
+          "NetworkAclId"		: { "Ref" : "ec2PublicSubnetNetworkAcl" },
+          "RuleNumber"			: "400",
+          "Protocol"			: "6",
+          "PortRange"			: { "From" : "1024", "To" : "65535" },
+          "RuleAction"			: "allow",
+          "Egress"			: "false",
+          "CidrBlock"			: "0.0.0.0/0"
+        }
+    },
+    "ec2PublicSubnetAclEntryIn500" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+        "Properties" : {
+          "NetworkAclId"		: { "Ref" : "ec2PublicSubnetNetworkAcl" },
+          "RuleNumber"			: "500",
+          "Protocol"			: "6",
+          "PortRange"			: { "From" : "22", "To" : "22" },
+          "RuleAction"			: "allow",
+          "Egress"			: "false",
+          "CidrBlock"			: "0.0.0.0/0"
+        }
+    },
+    "ec2PublicSubnetAclEntryIn600" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+        "Properties" : {
+          "NetworkAclId"		: { "Ref" : "ec2PublicSubnetNetworkAcl" },
+          "RuleNumber"			: "600",
+          "Protocol"			: "17",
+          "PortRange"			: { "From" : "123", "To" : "123" },
+          "RuleAction"			: "allow",
+          "Egress"			: "false",
+          "CidrBlock"			: "0.0.0.0/0"
+        }
+    },
+    "ec2PublicSubnetAclEntryOut100" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+        "Properties" : {
+          "NetworkAclId"		: { "Ref" : "ec2PublicSubnetNetworkAcl" },
+          "RuleNumber"			: "100",
+          "Protocol"			: "-1",
+          "RuleAction"			: "allow",
+          "Egress"			: "true",
+          "CidrBlock"			: { "Fn::FindInMap" : [ "RegionMap", { "Ref" : "AWS::Region" }, "VPC" ] }
+        }
+    },
+    "ec2PublicSubnetAclEntryOut200" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+        "Properties" : {
+          "NetworkAclId"		: { "Ref" : "ec2PublicSubnetNetworkAcl" },
+          "RuleNumber"			: "200",
+          "Protocol"			: "6",
+          "PortRange"			: { "From" : "1024", "To" : "65535" },
+          "RuleAction"			: "allow",
+          "Egress"			: "true",
+          "CidrBlock"			: "0.0.0.0/0"
+        }
+    },
+    "ec2PublicSubnetAclEntryOut300" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+        "Properties" : {
+          "NetworkAclId"		: { "Ref" : "ec2PublicSubnetNetworkAcl" },
+          "RuleNumber"			: "300",
+          "Protocol"			: "6",
+          "PortRange"			: { "From" : "443", "To" : "443" },
+          "RuleAction"			: "allow",
+          "Egress"			: "true",
+          "CidrBlock"			: "0.0.0.0/0"
+        }
+    },
+    "ec2PublicSubnetAclEntryOut400" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+        "Properties" : {
+          "NetworkAclId"		: { "Ref" : "ec2PublicSubnetNetworkAcl" },
+          "RuleNumber"			: "400",
+          "Protocol"			: "6",
+          "PortRange"			: { "From" : "80", "To" : "80" },
+          "RuleAction"			: "allow",
+          "Egress"			: "true",
+          "CidrBlock"			: "0.0.0.0/0"
+        }
+    },
+    "ec2PublicSubnetAclEntryOut500" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+        "Properties" : {
+          "NetworkAclId"		: { "Ref" : "ec2PublicSubnetNetworkAcl" },
+          "RuleNumber"			: "500",
+          "Protocol"			: "6",
+          "PortRange"			: { "From" : "22", "To" : "22" },
+          "RuleAction"			: "allow",
+          "Egress"			: "true",
+          "CidrBlock"			: "0.0.0.0/0"
+        }
+    },
+    "ec2PublicSubnetAclEntryOut600" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+        "Properties" : {
+          "NetworkAclId"		: { "Ref" : "ec2PublicSubnetNetworkAcl" },
+          "RuleNumber"			: "600",
+          "Protocol"			: "17",
+          "PortRange"			: { "From" : "123", "To" : "123" },
+          "RuleAction"			: "allow",
+          "Egress"			: "true",
+          "CidrBlock"			: "0.0.0.0/0"
+        }
+    },
+
+    "ec2PublicSubnetNetworkAclAssocAZ1" : {
+      "Type" : "AWS::EC2::SubnetNetworkAclAssociation",
+        "Properties" : {
+          "SubnetId"			: { "Ref" : "ec2PublicSubnetAZ1" },
+          "NetworkAclId"		: { "Ref" : "ec2PublicSubnetNetworkAcl" }
+      }
+    },
+    "ec2PublicSubnetNetworkAclAssocAZ2" : {
+      "Type" : "AWS::EC2::SubnetNetworkAclAssociation",
+        "Properties" : {
+          "SubnetId"			: { "Ref" : "ec2PublicSubnetAZ2" },
+          "NetworkAclId"		: { "Ref" : "ec2PublicSubnetNetworkAcl" }
+      }
+    },
+
+    "ec2PrivateSubnetNetworkAcl" : {
+      "Type" : "AWS::EC2::NetworkAcl",
+        "Properties" : {
+          "VpcId"			: { "Ref" : "ec2VPC" },
+        "Tags": [
+            {
+                "Key"			: "Name",
+                "Value"			: {
+						"Fn::Join" : [
+						"-",
+						  [
+						    { "Ref" : "OwnerService" },
+						    { "Ref" : "StackEnv" },
+						     "private-acl",
+						    { "Fn::FindInMap" : [ "RegionMap", { "Ref" : "AWS::Region" }, "Abbr" ] }
+						  ]
+						]
+					}
+            }
+        ]
+      }
+    },
+
+    "ec2PrivateSubnetAclEntryIn100" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+        "Properties" : {
+          "NetworkAclId"		: { "Ref" : "ec2PrivateSubnetNetworkAcl" },
+          "RuleNumber"			: "100",
+          "Protocol"			: "-1",
+          "RuleAction"			: "allow",
+          "Egress"			: "false",
+          "CidrBlock"			: { "Fn::FindInMap" : [ "RegionMap", { "Ref" : "AWS::Region" }, "VPC" ] }
+        }
+    },
+    "ec2PrivateSubnetAclEntryIn110" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+        "Properties" : {
+          "NetworkAclId"		: { "Ref" : "ec2PrivateSubnetNetworkAcl" },
+          "RuleNumber"			: "110",
+          "Protocol"			: "6",
+          "PortRange"			: { "From" : "3306", "To" : "3306" },
+          "RuleAction"			: "deny",
+          "Egress"			: "false",
+          "CidrBlock"			: "0.0.0.0/0"
+        }
+    },
+    "ec2PrivateSubnetAclEntryIn120" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+        "Properties" : {
+          "NetworkAclId"		: { "Ref" : "ec2PrivateSubnetNetworkAcl" },
+          "RuleNumber"			: "120",
+          "Protocol"			: "6",
+          "PortRange"			: { "From" : "11211", "To" : "11211" },
+          "RuleAction"			: "deny",
+          "Egress"			: "false",
+          "CidrBlock"			: "0.0.0.0/0"
+        }
+    },
+    "ec2PrivateSubnetAclEntryIn130" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+        "Properties" : {
+          "NetworkAclId"		: { "Ref" : "ec2PrivateSubnetNetworkAcl" },
+          "RuleNumber"			: "130",
+          "Protocol"			: "6",
+          "PortRange"			: { "From" : "8082", "To" : "8082" },
+          "RuleAction"			: "deny",
+          "Egress"			: "false",
+          "CidrBlock"			: "0.0.0.0/0"
+        }
+    },
+    "ec2PrivateSubnetAclEntryIn200" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+        "Properties" : {
+          "NetworkAclId"		: { "Ref" : "ec2PrivateSubnetNetworkAcl" },
+          "RuleNumber"			: "200",
+          "Protocol"			: "6",
+          "PortRange"			: { "From" : "1024", "To" : "65535" },
+          "RuleAction"			: "allow",
+          "Egress"			: "false",
+          "CidrBlock"			: "0.0.0.0/0"
+        }
+    },
+    "ec2PrivateSubnetAclEntryIn300" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+        "Properties" : {
+          "NetworkAclId"		: { "Ref" : "ec2PrivateSubnetNetworkAcl" },
+          "RuleNumber"			: "300",
+          "Protocol"			: "17",
+          "PortRange"			: { "From" : "1024", "To" : "65535" },
+          "RuleAction"			: "allow",
+          "Egress"			: "false",
+          "CidrBlock"			: "0.0.0.0/0"
+        }
+    },
+    "ec2PrivateSubnetAclEntryIn400" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+        "Properties" : {
+          "NetworkAclId"		: { "Ref" : "ec2PrivateSubnetNetworkAcl" },
+          "RuleNumber"			: "400",
+          "Protocol"			: "17",
+          "PortRange"			: { "From" : "123", "To" : "123" },
+          "RuleAction"			: "allow",
+          "Egress"			: "false",
+          "CidrBlock"			: "0.0.0.0/0"
+        }
+    },
+    "ec2PrivateSubnetAclEntryOut100" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+        "Properties" : {
+          "NetworkAclId"		: { "Ref" : "ec2PrivateSubnetNetworkAcl" },
+          "RuleNumber"			: "100",
+          "Protocol"			: "-1",
+          "RuleAction"			: "allow",
+          "Egress"			: "true",
+          "CidrBlock"			: { "Fn::FindInMap" : [ "RegionMap", { "Ref" : "AWS::Region" }, "VPC" ] }
+        }
+    },
+    "ec2PrivateSubnetAclEntryOut200" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+        "Properties" : {
+          "NetworkAclId"		: { "Ref" : "ec2PrivateSubnetNetworkAcl" },
+          "RuleNumber"			: "200",
+          "Protocol"			: "6",
+          "PortRange"			: { "From" : "443", "To" : "443" },
+          "RuleAction"			: "allow",
+          "Egress"			: "true",
+          "CidrBlock"			: "0.0.0.0/0"
+        }
+    },
+    "ec2PrivateSubnetAclEntryOut300" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+        "Properties" : {
+          "NetworkAclId"		: { "Ref" : "ec2PrivateSubnetNetworkAcl" },
+          "RuleNumber"			: "300",
+          "Protocol"			: "6",
+          "PortRange"			: { "From" : "80", "To" : "80" },
+          "RuleAction"			: "allow",
+          "Egress"			: "true",
+          "CidrBlock"			: "0.0.0.0/0"
+        }
+    },
+    "ec2PrivateSubnetAclEntryOut400" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+        "Properties" : {
+          "NetworkAclId"		: { "Ref" : "ec2PrivateSubnetNetworkAcl" },
+          "RuleNumber"			: "400",
+          "Protocol"			: "17",
+          "PortRange"			: { "From" : "123", "To" : "123" },
+          "RuleAction"			: "allow",
+          "Egress"			: "true",
+          "CidrBlock"			: "0.0.0.0/0"
+        }
+    },
+
+    "ec2PrivateSubnetNetworkAclAssocAZ1" : {
+      "Type" : "AWS::EC2::SubnetNetworkAclAssociation",
+        "Properties" : {
+          "SubnetId"			: { "Ref" : "ec2PrivateSubnetAZ1" },
+          "NetworkAclId"		: { "Ref" : "ec2PrivateSubnetNetworkAcl" }
+      }
+    },
+    "ec2PrivateSubnetNetworkAclAssocAZ2" : {
+      "Type" : "AWS::EC2::SubnetNetworkAclAssociation",
+        "Properties" : {
+          "SubnetId"			: { "Ref" : "ec2PrivateSubnetAZ2" },
+          "NetworkAclId"		: { "Ref" : "ec2PrivateSubnetNetworkAcl" }
+      }
+    },
+
+    "ec2IPAddressNAT1" : {
+      "Type" : "AWS::EC2::EIP",
+      "Properties" : {
+        "Domain"                        : "vpc"
+      }
+    },
+    "ec2GatewayNAT1" : {
+      "Type" : "AWS::EC2::NatGateway",
+      "DependsOn" : [ "ec2IPAddressNAT1", "ec2PublicSubnetAZ1" ],
+      "Properties" : {
+      "AllocationId"			: { "Fn::GetAtt" : ["ec2IPAddressNAT1", "AllocationId"]},
+      "SubnetId"			: { "Ref" : "ec2PublicSubnetAZ1"}
+      }
+    },
+
+    "ec2IPAddressNAT2" : {
+      "Type" : "AWS::EC2::EIP",
+      "Properties" : {
+        "Domain"                        : "vpc"
+      }
+    },
+    "ec2GatewayNAT2" : {
+      "Type" : "AWS::EC2::NatGateway",
+      "DependsOn" : [ "ec2IPAddressNAT2", "ec2PublicSubnetAZ2" ],
+      "Properties" : {
+      "AllocationId"			: { "Fn::GetAtt" : ["ec2IPAddressNAT2", "AllocationId"]},
+      "SubnetId"			: { "Ref" : "ec2PublicSubnetAZ2"}
+      }
+    }
+  },
+
+  "Outputs" : {
+
+    "VPCId" : {
+      "Description"                     : "VPC Id",
+      "Value"                           : { "Ref" : "ec2VPC" }
+    },
+    "GatewayIPAZ1" : {
+      "Description"                     : "GatewayNAT1 Public IP",
+      "Value"                           : { "Fn::Join" : [ " ",
+                                            [
+                                              "IP for NAT1 is",
+                                              { "Ref" : "ec2IPAddressNAT1" }
+                                            ]
+                                          ] }
+    },
+    "GatewayIPAZ2" : {
+      "Description"                     : "GatewayNAT2 Public IP",
+      "Value"                           : { "Fn::Join" : [ " ",
+                                            [
+                                              "IP for NAT2 is",
+                                              { "Ref" : "ec2IPAddressNAT2" }
+                                            ]
+                                          ] }
+    },
+    "AvailZone1" : {
+      "Description"                     : "Availability Zone for AZ1",
+      "Value"                           : { "Fn::GetAtt" : [ "ec2PrivateSubnetAZ1", "AvailabilityZone" ] }
+    },
+    "AvailZone2" : {
+      "Description"                     : "Availability Zone for AZ2",
+      "Value"                           : { "Fn::GetAtt" : [ "ec2PrivateSubnetAZ2", "AvailabilityZone" ] }
+    },
+    "PubSubnetAZ1" : {
+      "Description"                     : "Public Subnet Id for AZ1",
+      "Value"                           : { "Ref" : "ec2PublicSubnetAZ1" }
+    },
+    "PubSubnetAZ2" : {
+      "Description"                     : "Public Subnet Id for AZ2",
+      "Value"                           : { "Ref" : "ec2PublicSubnetAZ2" }
+    },
+    "PriSubnetAZ1" : {
+      "Description"                     : "Private Subnet Id for AZ1",
+      "Value"                           : { "Ref" : "ec2PrivateSubnetAZ1" }
+    },
+    "PriSubnetAZ2" : {
+      "Description"                     : "Private Subnet Id for AZ2",
+      "Value"                           : { "Ref" : "ec2PrivateSubnetAZ2" }
+    }
+  }
+}

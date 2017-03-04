@@ -1,0 +1,273 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+
+  "Description": "Master (wrapper) template.",
+
+  "Metadata" : {
+    "AWS::CloudFormation::Interface" : {
+    "ParameterGroups" : [
+      {
+        "Label"                         : { "default" : "VPC Resource Tagging" },
+        "Parameters"                    : [ "OwnerService", "StackEnv" ]
+      },
+      {
+        "Label"                         : { "default" : "ELB Config" },
+        "Parameters"                    : [ "HealthTarget", "SSLCertARN" ]
+      },
+      {
+        "Label"                         : { "default" : "Instance Config" },
+        "Parameters"                    : [ "InstanceType", "InstanceKeys" ]
+      },
+      {
+        "Label"                         : { "default" : "Autoscaling Config" },
+        "Parameters"                    : [ "Threshold", "DesiredCapacity", "MaxSize", "MinSize", "Email" ]
+      },
+      {
+        "Label"                         : { "default" : "ElastiCache Cluster Config" },
+        "Parameters"                    : [ "CacheNodeType", "NumberOfCacheNodes" ]
+      },
+      {
+        "Label"                         : { "default" : "RDS Read Replica Config" },
+        "Parameters"                    : [ "RDSNodeType", "RDSMasterARN" ]
+      },
+      {
+        "Label"                         : { "default" : "Bastion Config" },
+        "Parameters"                    : [ "BastionInstanceType", "BastionKeys", "PermitCIDR" ]
+      }
+    ],
+    "ParameterLabels" : {
+        "OwnerService"                  : { "default" : "Service name" },
+        "StackEnv"                      : { "default" : "Environment name" },
+        "HealthTarget"                  : { "default" : "ELB health check URI" },
+        "SSLCertARN"                    : { "default" : "SSL certificate ARN" },
+        "InstanceType"                  : { "default" : "Instance type and size" },
+        "InstanceKeys"                  : { "default" : "Instance keys" },
+        "Threshold"                     : { "default" : "Connection count threshold" },
+        "DesiredCapacity"               : { "default" : "Desired instance capacity" },
+        "MaxSize"                       : { "default" : "Autoscale max size" },
+        "MinSize"                       : { "default" : "Autoscale min size" },
+        "Email"                         : { "default" : "email address" },
+        "CacheNodeType"                 : { "default" : "Node type and size" },
+        "NumberOfCacheNodes"            : { "default" : "Number of nodes" },
+        "RDSNodeType"                   : { "default" : "Node type and size" },
+        "RDSMasterARN"                  : { "default" : "Master RDS ARN" },
+        "BastionInstanceType"           : { "default" : "Instance type and size" },
+        "BastionKeys"                   : { "default" : "Bastion keys" },
+        "PermitCIDR"                    : { "default" : "Permitted CIDR" }
+      }
+    }
+  },
+
+  "Parameters" : {
+
+    "OwnerService" : {
+        "Type"                          : "String",
+        "Default"                       : "cloud",
+        "Description"                   : "Owner or service name. (Use lowercase, no spaces, dashes ok.)",
+        "AllowedPattern"                : "[-a-z0-9]*",
+        "ConstraintDescription"         : "Must be lowercase, no spaces, dashes ok."
+    },
+    "StackEnv" : {
+        "Type"                          : "String",
+        "Default"                       : "dev",
+        "Description"                   : "Environment: prod, stage, dev.. (Use lowercase, no spaces, dashes ok.)",
+        "AllowedPattern"                : "[-a-z0-9]*",
+        "ConstraintDescription"         : "Must be lowercase, no spaces, dashes ok."
+    },
+    "HealthTarget" : {
+        "Type"                          : "String",
+        "Default"                       : "/index.html",
+        "AllowedPattern"                : "/[a-z0-9.-/]*",
+        "Description"                   : "Enter the web instance health check URI."
+    },
+    "SSLCertARN" : {
+        "Type"                          : "String",
+        "Default"                       : "arn:aws:iam::123456789012:server-certificate/cloud.com",
+        "AllowedPattern"                : "arn:aws:iam::[0-9]+:server-certificate/[a-z0-9.-]*",
+        "Description"                   : "Enter the site SSL cerificate ARN."
+    },
+    "InstanceType" : {
+        "Type"                          : "String",
+        "Default"                       : "t2.micro",
+        "AllowedValues"                 : [ "t2.micro", "m3.medium", "m3.large", "m3.xlarge" ],
+        "Description"                   : "Instance size."
+    },
+    "InstanceKeys" : {
+        "Type"                          : "AWS::EC2::KeyPair::KeyName",
+        "Description"                   : "Your instance key pair name."
+    },
+    "Threshold" : {
+        "Type"                          : "Number",
+        "Default"                       : "9000",
+        "Description"                   : "The instance pool connection count before scaling up."
+    },
+    "DesiredCapacity" : {
+        "Type"                          : "Number",
+        "Default"                       : "2",
+        "Description"                   : "Number of instances that should be running."
+    },
+    "MaxSize" : {
+        "Type"                          : "Number",
+        "Default"                       : "6",
+        "Description"                   : "Maximum size of the autoscale group."
+    },
+    "MinSize" : {
+        "Type"                          : "Number",
+        "Default"                       : "2",
+        "Description"                   : "Minimum size of the autoscale group."
+    },
+    "Email" : {
+        "Type"                          : "String",
+        "Default"                       : "admins@cloud.com",
+        "AllowedPattern"                : "[-a-z0-9]*\\@[-a-z0-9]*\\.[a-z]*",
+        "Description"                   : "Where alarms should be sent."
+    },
+    "CacheNodeType" : {
+        "Type"                          : "String",
+        "Default"                       : "cache.t2.micro",
+        "Description"                   : "The node compute and memory capacity.",
+        "AllowedValues"                 : [ "cache.t2.micro", "cache.t2.small", "cache.t2.medium", "cache.m3.medium", "cache.m3.large" ],
+        "ConstraintDescription"         : "Please select a valid cache node type."
+    },
+    "NumberOfCacheNodes" : {
+        "Type"                          : "Number",
+        "Default"                       : "2",
+        "Description"                   : "The number of Cache nodes in the Cluster.",
+        "MinValue"                      : "2",
+        "MaxValue"                      : "10",
+        "ConstraintDescription"         : "Select between 2 and 10."
+    },
+    "RDSNodeType" : {
+        "Type"                          : "String",
+        "Default"                       : "db.t2.micro",
+        "Description"                   : "The read replica compute and memory capacity.",
+        "AllowedValues"                 : [ "db.t2.micro", "db.t2.small", "db.t2.medium", "db.t2.large" ],
+        "ConstraintDescription"         : "Please select a valid RDS node type."
+    },
+    "RDSMasterARN" : {
+        "Type"                          : "String",
+        "Default"                       : "arn:aws:rds:us-west-1:123456789012:db:master-uw1",
+        "AllowedPattern"                : "arn:aws:rds:[a-z1-2-]+:[0-9]+:db:[a-z0-9-]*",
+        "Description"                   : "Enter the Db master RDS ARN."
+    },
+    "BastionInstanceType" : {
+        "Type"                          : "String",
+        "Default"                       : "t2.micro",
+        "AllowedValues"                 : [ "t2.micro", "t2.small", "t2.medium" ],
+        "Description"                   : "The instance size desired."
+    },
+    "BastionKeys" : {
+        "Type"                          : "AWS::EC2::KeyPair::KeyName",
+        "Description"                   : "Bastion SSH PEM key name."
+    },
+    "PermitCIDR" : {
+        "Type"                          : "String",
+        "Default"                       : "0.0.0.0/0",
+        "Description"                   : "Enter the CIDR or IP address to permit SSH from. (Note: Used to create a bastion security group.)",
+        "AllowedPattern"                : "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+        "ConstraintDescription"         : "Please enter a valid IP CIDR range of the form x.x.x.x/x."
+    }
+  },
+
+  "Resources": {
+
+    "VPC" : {
+      "Type" : "AWS::CloudFormation::Stack",
+      "Properties" : {
+        "TemplateURL" : "https://s3.amazonaws.com/cloud-templates-1/vpc-template.json",
+        "Parameters" : {
+          "OwnerService": { "Ref" : "OwnerService" },
+          "StackEnv": { "Ref" : "StackEnv" }
+        }
+      }
+    },
+
+    "Security" : {
+      "Type" : "AWS::CloudFormation::Stack",
+      "DependsOn" : [ "VPC" ],
+      "Properties" : {
+        "TemplateURL" : "https://s3.amazonaws.com/cloud-templates-1/security-template.json",
+        "Parameters" : {
+          "VPCId" : { "Fn::GetAtt" : ["VPC", "Outputs.VPCId"] },
+          "PermitCIDR" : { "Ref" : "PermitCIDR" }
+        }
+      }
+    },
+
+    "ELB" : {
+      "Type" : "AWS::CloudFormation::Stack",
+      "DependsOn" : [ "VPC", "Security" ],
+      "Properties" : {
+        "TemplateURL" : "https://s3.amazonaws.com/cloud-templates-1/elb-template.json",
+        "Parameters" : {
+          "HealthTarget" : { "Ref" : "HealthTarget" },
+          "SSLCertARN" : { "Ref" : "SSLCertARN" },
+          "ELBSecurityGroup" : { "Fn::GetAtt" : ["Security", "Outputs.ELBSecurityGroup"] },
+          "PublicSubnets" : {
+            "Fn::Join": [",", [{ "Fn::GetAtt" : ["VPC", "Outputs.PubSubnetAZ1"] }, { "Fn::GetAtt" : ["VPC", "Outputs.PubSubnetAZ2"] }]]
+          },
+          "InstanceType" : { "Ref" : "InstanceType" },
+          "InstanceKeys" : { "Ref" : "InstanceKeys" },
+          "Threshold" : { "Ref" : "Threshold" },
+          "CommonSecurityGroup" : { "Fn::GetAtt" : ["Security", "Outputs.CommonSecurityGroup"] },
+          "AvailZones" : {
+            "Fn::Join": [",", [{ "Fn::GetAtt" : ["VPC", "Outputs.AvailZone1"] }, { "Fn::GetAtt" : ["VPC", "Outputs.AvailZone2"] }]]
+          },
+          "PrivateSubnets" : {
+            "Fn::Join": [",", [{ "Fn::GetAtt" : ["VPC", "Outputs.PriSubnetAZ1"] }, { "Fn::GetAtt" : ["VPC", "Outputs.PriSubnetAZ2"] }]]
+          },
+          "DesiredCapacity" : { "Ref" : "DesiredCapacity" },
+          "MaxSize" : { "Ref" : "MaxSize" },
+          "MinSize" : { "Ref" : "MinSize" },
+          "Email" : { "Ref" : "Email" }
+        }
+      }
+    },
+
+    "Cache" : {
+      "Type" : "AWS::CloudFormation::Stack",
+      "DependsOn" : [ "VPC", "Security" ],
+      "Properties" : {
+        "TemplateURL" : "https://s3.amazonaws.com/cloud-templates-1/cache-template.json",
+        "Parameters" : {
+          "CacheNodeType" : { "Ref" : "CacheNodeType" },
+          "NumberOfCacheNodes" : { "Ref" : "NumberOfCacheNodes" },
+          "CacheSecurityGroup" : { "Fn::GetAtt" : ["Security", "Outputs.CacheSecurityGroup"] },
+          "CacheSubnets" : {
+            "Fn::Join": [",", [{ "Fn::GetAtt" : ["VPC", "Outputs.PriSubnetAZ1"] }, { "Fn::GetAtt" : ["VPC", "Outputs.PriSubnetAZ2"] }]]
+          }
+        }
+      }
+    },
+
+    "RDS" : {
+      "Type" : "AWS::CloudFormation::Stack",
+      "DependsOn" : [ "VPC", "Security" ],
+      "Properties" : {
+        "TemplateURL" : "https://s3.amazonaws.com/cloud-templates-1/rds-replica-template.json",
+        "Parameters" : {
+          "RDSNodeType" : { "Ref" : "RDSNodeType" },
+          "RDSMasterARN" : { "Ref" : "RDSMasterARN" },
+          "RDSSecurityGroup" : { "Fn::GetAtt" : ["Security", "Outputs.RDSSecurityGroup"] },
+          "DBSubnets" : {
+            "Fn::Join": [",", [{ "Fn::GetAtt" : ["VPC", "Outputs.PriSubnetAZ1"] }, { "Fn::GetAtt" : ["VPC", "Outputs.PriSubnetAZ2"] }]]
+          }
+        }
+      }
+    },
+
+    "Bastion" : {
+      "Type" : "AWS::CloudFormation::Stack",
+      "DependsOn" : [ "VPC", "Security" ],
+      "Properties" : {
+        "TemplateURL" : "https://s3.amazonaws.com/cloud-templates-1/bastion-template.json",
+        "Parameters" : {
+          "BastionInstanceType" : { "Ref" : "BastionInstanceType" },
+          "BastionKeys" : { "Ref" : "BastionKeys" },
+          "BastionSecurityGroup" : { "Fn::GetAtt" : ["Security", "Outputs.BastionSecurityGroup"] },
+          "PublicSubnet" : { "Fn::GetAtt" : ["VPC", "Outputs.PubSubnetAZ1"] }
+        }
+      }
+    }
+  }
+}
