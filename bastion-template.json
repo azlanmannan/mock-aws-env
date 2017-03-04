@@ -1,0 +1,94 @@
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
+  "Description" : "Bastion host template.",
+
+  "Metadata" : {
+    "AWS::CloudFormation::Interface" : {
+    "ParameterGroups" : [
+      {
+        "Label"                         : { "default" : "Bastion Config" },
+        "Parameters"                    : [ "BastionInstanceType", "BastionKeys", "BastionSecurityGroup", "PublicSubnet" ]
+      }
+    ],
+    "ParameterLabels" : {
+        "BastionInstanceType"           : { "default" : "Instance type and size" },
+        "BastionKeys"                   : { "default" : "Bastion keys" },
+        "BastionSecurityGroup"          : { "default" : "Bastion security group" },
+        "PublicSubnet"                  : { "default" : "Public subnet" }
+      }
+    }
+  },
+
+  "Parameters" : {
+
+    "BastionInstanceType" : {
+        "Type"                          : "String",
+        "Default"                       : "t2.micro",
+        "AllowedValues"                 : [ "t2.micro", "t2.small", "t2.medium" ],
+        "Description"                   : "The instance size desired."
+    },
+    "BastionKeys" : {
+        "Type"                          : "AWS::EC2::KeyPair::KeyName",
+        "Description"                   : "Bastion SSH PEM key name."
+    },
+    "BastionSecurityGroup" : {
+        "Type"                          : "AWS::EC2::SecurityGroup::Id",
+        "Description"                   : "Bastion security group."
+    },
+    "PublicSubnet" : {
+        "Type"                          : "AWS::EC2::Subnet::Id",
+        "Description"                   : "Public Subnet Id."
+    }
+  },
+
+  "Mappings" : {
+
+    "RegionMap": {
+        "us-east-1"                     : { "HVM"  : "ami-0b33d91d",
+                                            "PV"   : "ami-7a3dd76c"
+                                          },
+        "eu-west-1"                     : { "HVM"  : "ami-70edb016",
+                                            "PV"   : "ami-e0f2af86"
+                                          },
+        "ap-northeast-1"                : { "HVM"  : "ami-56d4ad31",
+                                            "PV"   : "ami-bdd2abda"
+                                          },
+        "us-west-2"                     : { "HVM"  : "ami-f173cc91",
+                                            "PV"   : "ami-8a72cdea"
+                                          }
+    }
+  },
+
+  "Resources" : {
+
+    "ec2BastionInstance" : {
+      "Type" : "AWS::EC2::Instance",
+      "Properties" : {
+        "ImageId"                       : { "Fn::FindInMap" : [ "RegionMap", { "Ref" : "AWS::Region" }, "HVM" ] },
+        "InstanceType"                  : { "Ref" : "BastionInstanceType" },
+        "KeyName"                       : { "Ref" : "BastionKeys" },
+        "Tenancy"                       : "default",
+        "Monitoring"                    : "true",
+        "DisableApiTermination"         : "false",
+        "NetworkInterfaces"             : [ {
+          "AssociatePublicIpAddress"	: "true",
+          "DeleteOnTermination"         : "true",
+          "DeviceIndex"                 : "0",
+          "SubnetId"                    : { "Ref" : "PublicSubnet" },
+          "GroupSet"                    : [ { "Ref" : "BastionSecurityGroup" } ]
+        } ],
+        "Tags": [
+            { "Key" : "Name",  "Value" : "bastion" }
+        ]
+      }
+    }
+  },
+
+  "Outputs" : {
+
+    "BastionIP" : {
+    "Description"                       : "Bastion Public IP",
+    "Value"                             : { "Fn::GetAtt" : [ "ec2BastionInstance", "PublicIp" ] }
+    }
+  }
+}

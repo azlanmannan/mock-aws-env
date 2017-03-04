@@ -1,0 +1,100 @@
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
+  "Description" : "RDS read replica template.",
+
+  "Metadata" : {
+    "AWS::CloudFormation::Interface" : {
+    "ParameterGroups" : [
+      {
+        "Label"                         : { "default" : "RDS Read Replica Config" },
+        "Parameters"                    : [ "RDSNodeType", "RDSMasterARN" ]
+      },
+      {
+        "Label"                         : { "default" : "VPC Config" },
+        "Parameters"                    : [ "RDSSecurityGroup", "DBSubnets" ]
+      }
+    ],
+    "ParameterLabels" : {
+        "RDSNodeType"                   : { "default" : "Node type and size" },
+        "RDSMasterARN"                  : { "default" : "Master RDS ARN" },
+        "RDSSecurityGroup"              : { "default" : "RDS security group" },
+        "DBSubnets"                     : { "default" : "VPC private subnets" }
+      }
+    }
+  },
+
+  "Parameters" : {
+
+    "RDSNodeType" : {
+        "Type"                          : "String",
+        "Default"                       : "db.t2.micro",
+        "Description"                   : "The read replica compute and memory capacity.",
+        "AllowedValues"                 : [ "db.t2.micro", "db.t2.small", "db.t2.medium", "db.t2.large" ],
+        "ConstraintDescription"         : "Please select a valid RDS node type."
+    },
+    "RDSMasterARN" : {
+        "Type"                          : "String",
+        "Default"                       : "arn:aws:rds:us-west-1:123456789012:db:master-uw1",
+        "AllowedPattern"                : "arn:aws:rds:[a-z1-2-]+:[0-9]+:db:[a-z0-9-]*",
+        "Description"                   : "Enter the Db master RDS ARN."
+    },
+    "RDSSecurityGroup" : {
+        "Type"                          : "AWS::EC2::SecurityGroup::Id",
+        "Description"                   : "The RDS read replica security group."
+    },
+    "DBSubnets" : {
+        "Type"                          : "List<AWS::EC2::Subnet::Id>",
+        "Description"                   : "Select the Subnets for your RDS read replica."
+    }
+  },
+
+  "Mappings" : {
+
+    "RegionMap": {
+        "us-east-1"                     : { "DBInstance"  : "replica-ue1"
+                                          },
+        "eu-west-1"                     : { "DBInstance"  : "replica-ew1"
+                                          },
+        "ap-northeast-1"                : { "DBInstance"  : "replica-an1"
+                                          },
+        "us-west-2"                     : { "DBInstance"  : "replica-uw2"
+                                          }
+    }
+  },
+
+  "Resources" : {
+
+    "rdsDBSubnetGroup" : {
+      "Type" : "AWS::RDS::DBSubnetGroup",
+      "Properties" : {
+        "DBSubnetGroupDescription"              : "RDS read replica subnet group",
+        "SubnetIds"                             : { "Ref" : "DBSubnets" }
+      }
+    },
+
+    "rdsReplicaDB" : {
+      "Type" : "AWS::RDS::DBInstance",
+      "DependsOn" : [ "rdsDBSubnetGroup" ],
+      "Properties" : {
+        "DBInstanceIdentifier"                  : { "Fn::FindInMap" : [ "RegionMap", { "Ref" : "AWS::Region" }, "DBInstance" ] },
+        "SourceDBInstanceIdentifier"            : { "Ref" : "RDSMasterARN" },
+        "DBSubnetGroupName"                     : { "Ref" : "rdsDBSubnetGroup" },
+        "DBInstanceClass"                       : { "Ref" : "RDSNodeType" },
+        "StorageType"                   	: "gp2"
+      }
+    }
+  },
+
+  "Outputs" : {
+
+    "ReplicaConnString" : {
+      "Description"                     : "Connection string for the replica database",
+      "Value"                           : { "Fn::Join": [ "", [ "jdbc:mysql://",
+                                          { "Fn::GetAtt": [ "rdsReplicaDB", "Endpoint.Address" ] },
+                                          ":",
+                                          { "Fn::GetAtt": [ "rdsReplicaDB", "Endpoint.Port" ] },
+                                          "/",
+                                          "cloud" ]]}
+    }
+  }
+}

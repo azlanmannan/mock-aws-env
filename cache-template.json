@@ -1,0 +1,97 @@
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
+  "Description" : "ElastiCache cluster template.",
+
+  "Metadata" : {
+    "AWS::CloudFormation::Interface" : {
+    "ParameterGroups" : [
+      {
+        "Label"                         : { "default" : "Cluster Config" },
+        "Parameters"                    : [ "CacheNodeType", "NumberOfCacheNodes" ]
+      },
+      {
+        "Label"                         : { "default" : "VPC Config" },
+        "Parameters"                    : [ "CacheSecurityGroup", "CacheSubnets" ]
+      }
+    ],
+    "ParameterLabels" : {
+        "CacheNodeType"                 : { "default" : "Node type and size" },
+        "NumberOfCacheNodes"            : { "default" : "Number of nodes" },
+        "CacheSecurityGroup"            : { "default" : "ElastiCache node security group" },
+        "CacheSubnets"                  : { "default" : "VPC private subnets" }
+      }
+    }
+  },
+
+  "Parameters" : {
+
+    "CacheNodeType" : {
+        "Type"                          : "String",
+        "Default"                       : "cache.t2.micro",
+        "Description"                   : "The node compute and memory capacity.",
+        "AllowedValues"                 : [ "cache.t2.micro", "cache.t2.small", "cache.t2.medium", "cache.m3.medium", "cache.m3.large" ],
+        "ConstraintDescription"         : "Please select a valid cache node type."
+    },
+    "NumberOfCacheNodes" : {
+        "Type"                          : "Number",
+        "Default"                       : "2",
+        "Description"                   : "The number of Cache nodes in the Cluster.",
+        "MinValue"                      : "2",
+        "MaxValue"                      : "10",
+        "ConstraintDescription"         : "Select between 2 and 10."
+    },
+    "CacheSecurityGroup" : {
+        "Type"                          : "AWS::EC2::SecurityGroup::Id",
+        "Description"                   : "The cache node security group."
+    },
+    "CacheSubnets" : {
+        "Type"                          : "List<AWS::EC2::Subnet::Id>",
+        "Description"                   : "Select the Subnets for your cache group."
+    }
+  },
+
+  "Resources" : {
+
+    "elcCacheSubnetGroup" : {
+      "Type" : "AWS::ElastiCache::SubnetGroup",
+        "Properties" : {
+          "Description"                 : "Subnets available for the ElastiCache Cluster",
+          "SubnetIds"                   : { "Ref" : "CacheSubnets" }
+        }
+    },
+    "elcCacheParameters" : {
+      "Type" : "AWS::ElastiCache::ParameterGroup",
+        "Properties" : {
+          "CacheParameterGroupFamily"   : "memcached1.4",
+          "Description"                 : "Cache Parameter Group"
+        }
+    },
+
+    "elcCacheCluster" : {
+      "Type": "AWS::ElastiCache::CacheCluster",
+      "DependsOn" : [ "elcCacheSubnetGroup", "elcCacheParameters" ],
+        "Properties": {
+          "CacheSubnetGroupName"        : { "Ref" : "elcCacheSubnetGroup" },
+          "VpcSecurityGroupIds"         : [ { "Ref" : "CacheSecurityGroup" } ],
+          "CacheNodeType"               : { "Ref" : "CacheNodeType" },
+          "CacheParameterGroupName"     : { "Ref" : "elcCacheParameters" },
+          "Engine"                      : "memcached",
+          "Port"                        : "11211",
+          "NumCacheNodes"               : { "Ref" : "NumberOfCacheNodes" }
+      }
+    }
+  },
+
+  "Outputs" : {
+
+    "CacheCluster" : {
+      "Description"                     : "Endpoint for the Cache Cluster.",
+      "Value"                           : { "Fn::Join" : [ ":",
+                                            [
+                                              { "Fn::GetAtt" : [ "elcCacheCluster", "ConfigurationEndpoint.Address" ] },
+                                              { "Fn::GetAtt" : [ "elcCacheCluster", "ConfigurationEndpoint.Port" ] }
+                                            ]
+                                          ] }
+    }
+  }
+}

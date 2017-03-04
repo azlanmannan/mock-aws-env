@@ -1,0 +1,153 @@
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
+  "Description" : "RDS Master Database template.",
+
+  "Metadata" : {
+    "AWS::CloudFormation::Interface" : {
+    "ParameterGroups" : [
+      {
+        "Label"                         : { "default" : "RDS Master Config" },
+        "Parameters"                    : [ "DBName", "DBUser", "DBPassword", "DBAllocatedStorage", "DBInstanceClass" ]
+      },
+      {
+        "Label"                         : { "default" : "VPC Config" },
+        "Parameters"                    : [ "VPCId", "DBSubnets" ]
+      }
+    ],
+    "ParameterLabels" : {
+        "DBName"                   	: { "default" : "Database name" },
+        "DBUser"                   	: { "default" : "Database username" },
+        "DBPassword"               	: { "default" : "Database password" },
+        "DBAllocatedStorage"       	: { "default" : "Database size" },
+        "DBInstanceClass"       	: { "default" : "Database type and size" },
+        "VPCId"       			: { "default" : "VPC Id" },
+        "DBSubnets"    			: { "default" : "Db Public subnets" }
+      }
+    }
+  },
+
+  "Parameters" : {
+
+    "DBName": {
+      "Type"                            : "String",
+      "Default"                         : "cloud",
+      "MinLength"                       : "1",
+      "MaxLength"                       : "64",
+      "AllowedPattern"                  : "[a-zA-Z][a-zA-Z0-9]*",
+      "ConstraintDescription"           : "Must begin with a letter and contain only alphanumeric characters.",
+      "Description"                     : "The database name."
+    },
+    "DBUser": {
+      "Type"                            : "String",
+      "NoEcho"                          : "true",
+      "MinLength"                       : "1",
+      "MaxLength"                       : "16",
+      "AllowedPattern"                  : "[a-zA-Z][a-zA-Z0-9]*",
+      "ConstraintDescription"           : "Must begin with a letter and contain only alphanumeric characters.",
+      "Description"                     : "The database Admin account."
+    },
+    "DBPassword": {
+      "Type"                            : "String",
+      "NoEcho"                          : "true",
+      "MinLength"                       : "8",
+      "MaxLength"                       : "41",
+      "AllowedPattern"                  : "[a-zA-Z0-9~!@#$%^&*()=+_-]+",
+      "ConstraintDescription"           : "Must be 8 characters or more.",
+      "Description"                     : "The database Admin password."
+    },
+    "DBAllocatedStorage": {
+      "Type"                            : "Number",
+      "Default"                         : "10",
+      "MinValue"                        : "10",
+      "MaxValue"                        : "25",
+      "Description"                     : "The size of the database (Gb)"
+    },
+    "DBInstanceClass": {
+      "Type"                            : "String",
+      "Default"                         : "db.t2.micro",
+      "AllowedValues"  	                : [ "db.t2.micro", "db.t2.small", "db.t2.medium", "db.t2.large" ],
+      "Description"                     : "The database instance type."
+    },
+    "VPCId" : {
+        "Type"                          : "AWS::EC2::VPC::Id",
+        "Description"                   : "Your VPC Id."
+    },
+    "DBSubnets" : {
+      "Type"                            : "List<AWS::EC2::Subnet::Id>",
+      "Description"                     : "The Db subnets."
+    }
+  },
+
+  "Mappings" : {
+
+    "RegionMap": {
+        "us-east-1"                     : { "DBInstance"  : "master-ue1"
+                                          },
+        "eu-west-1"                     : { "DBInstance"  : "master-ew1"
+                                          },
+        "ap-northeast-1"                : { "DBInstance"  : "master-an1"
+                                          },
+        "us-west-2"                     : { "DBInstance"  : "master-uw2"
+                                          }
+    }
+  },
+
+  "Resources" : {
+
+    "ec2DBSecurityGroup" : {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupDescription"              : "RDS Master database security group",
+        "VpcId"                         : { "Ref" : "VPCId" },
+        "SecurityGroupIngress" : [
+          { "IpProtocol" : "tcp", "FromPort" : "3306",  "ToPort" : "3306",  "CidrIp" : "0.0.0.0/0" }
+        ],
+        "Tags"                          : [ { "Key" : "Name", "Value" : "rds-master" } ]
+      }
+    },
+
+    "rdsDBSubnetGroup" : {
+      "Type" : "AWS::RDS::DBSubnetGroup",
+      "Properties" : {
+        "DBSubnetGroupDescription"      : "RDS Master subnet group",
+        "SubnetIds"                     : { "Ref" : "DBSubnets" },
+        "Tags"                                  : [ { "Key" : "Name", "Value" : "RDS Master subnet group" } ]
+      }
+    },
+
+    "rdsMasterDB" : {
+      "Type" : "AWS::RDS::DBInstance",
+      "DependsOn" : [ "rdsDBSubnetGroup", "ec2DBSecurityGroup" ],
+      "Properties" : {
+        "DBName"                        : { "Ref" : "DBName" },
+        "DBInstanceClass"               : { "Ref" : "DBInstanceClass" },
+        "DBInstanceIdentifier"          : { "Fn::FindInMap" : [ "RegionMap", { "Ref" : "AWS::Region" }, "DBInstance" ] },
+        "AllocatedStorage"              : { "Ref" : "DBAllocatedStorage" },
+        "StorageType"                   : "gp2",
+        "Engine"                        : "MySQL",
+        "PubliclyAccessible"            : "true",
+        "AutoMinorVersionUpgrade"       : "true",
+        "BackupRetentionPeriod"         : "7",
+        "MasterUsername"                : { "Ref" : "DBUser" },
+        "MasterUserPassword"            : { "Ref" : "DBPassword" },
+        "DBSubnetGroupName"             : { "Ref" : "rdsDBSubnetGroup" },
+        "VPCSecurityGroups"             : [ { "Ref" : "ec2DBSecurityGroup" } ],
+        "Tags"                          : [ { "Key" : "Name", "Value" : "Master database" } ]
+      },
+      "DeletionPolicy"                  : "Snapshot"
+    }
+  },
+
+  "Outputs" : {
+
+    "MasterConnString" : {
+      "Description"                     : "Connection string for the master database",
+      "Value"                           : { "Fn::Join": [ "", [ "jdbc:mysql://",
+                                          { "Fn::GetAtt": [ "rdsMasterDB", "Endpoint.Address" ] },
+                                          ":",
+                                          { "Fn::GetAtt": [ "rdsMasterDB", "Endpoint.Port" ] },
+                                          "/",
+                                          { "Ref": "DBName" }]]}
+    }
+  }
+}

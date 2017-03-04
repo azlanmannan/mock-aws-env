@@ -1,0 +1,344 @@
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
+  "Description" : "ELB and Autoscale template.",
+
+  "Metadata" : {
+    "AWS::CloudFormation::Interface" : {
+    "ParameterGroups" : [
+      {
+        "Label"                         : { "default" : "ELB Config" },
+        "Parameters"                    : [ "HealthTarget", "SSLCertARN", "PublicSubnets", "ELBSecurityGroup" ]
+      },
+      {
+        "Label"                         : { "default" : "Autoscale Config" },
+        "Parameters"                    : [ "InstanceType", "InstanceKeys", "Threshold", "CommonSecurityGroup", "AvailZones", "PrivateSubnets", "DesiredCapacity", "MaxSize", "MinSize", "Email" ]
+      }
+    ],
+    "ParameterLabels" : {
+        "HealthTarget"                  : { "default" : "ELB health check URI" },
+        "SSLCertARN"                    : { "default" : "SSL certificate ARN" },
+        "PublicSubnets"                 : { "default" : "ELB public subnets" },
+        "ELBSecurityGroup"              : { "default" : "ELB security group" },
+        "InstanceType"                  : { "default" : "Instance type and size" },
+        "InstanceKeys"                  : { "default" : "Instance keys" },
+        "Threshold"                     : { "default" : "Connection count threshold" },
+        "CommonSecurityGroup"           : { "default" : "Common security group" },
+        "AvailZones"                    : { "default" : "Autoscale availability-zones" },
+        "PrivateSubnets"                : { "default" : "Autoscale private subnets" },
+        "DesiredCapacity"               : { "default" : "Desired instance capacity" },
+        "MaxSize"                       : { "default" : "Autoscale max size" },
+        "MinSize"                       : { "default" : "Autoscale min size" },
+        "Email"                         : { "default" : "email address" }
+      }
+    }
+  },
+
+  "Parameters" : {
+
+    "HealthTarget" : {
+        "Type"                          : "String",
+        "Default"                       : "/index.html",
+        "AllowedPattern"                : "/[a-z0-9.-/]*",
+        "Description"                   : "Enter the web instance health check URI."
+    },
+    "SSLCertARN" : {
+        "Type"                          : "String",
+        "Default"                       : "arn:aws:iam::123456789012:server-certificate/cloud.com",
+        "AllowedPattern"                : "arn:aws:iam::[0-9]+:server-certificate/[a-z0-9.-]*",
+        "Description"                   : "Enter the site SSL cerificate ARN."
+    },
+    "PublicSubnets" : {
+        "Type"                          : "List<AWS::EC2::Subnet::Id>",
+        "Description"                   : "Enter the subnet ids for your public subnets."
+    },
+    "ELBSecurityGroup" : {
+        "Type"                          : "List<AWS::EC2::SecurityGroup::Id>",
+        "Description"                   : "One or more security group ids."
+    },
+    "InstanceType" : {
+        "Type"                          : "String",
+        "Default"                       : "t2.micro",
+        "AllowedValues"                 : [ "t2.micro", "m3.medium", "m3.large", "m3.xlarge" ],
+        "Description"                   : "Instance size."
+    },
+    "InstanceKeys" : {
+        "Type"                          : "AWS::EC2::KeyPair::KeyName",
+        "Description"                   : "Your instance key pair name."
+    },
+    "Threshold" : {
+        "Type"                          : "Number",
+        "Default"                       : "9000",
+        "Description"                   : "The instance pool connection count before scaling up."
+    },
+    "CommonSecurityGroup" : {
+        "Type"                          : "AWS::EC2::SecurityGroup::Id",
+        "Description"                   : "Instance (common) security group."
+    },
+    "AvailZones" : {
+        "Type"                          : "List<AWS::EC2::AvailabilityZone::Name>",
+        "Description"                   : "Enter the availability-zones for your private subnets."
+    },
+    "PrivateSubnets" : {
+        "Type"                          : "List<AWS::EC2::Subnet::Id>",
+        "Description"                   : "Subnet Ids for your private subnets."
+    },
+    "DesiredCapacity" : {
+        "Type"                          : "Number",
+        "Default"                       : "2",
+        "Description"                   : "Number of instances that should be running."
+    },
+    "MaxSize" : {
+        "Type"                          : "Number",
+        "Default"                       : "6",
+        "Description"                   : "Maximum size of the autoscale group."
+    },
+    "MinSize" : {
+        "Type"                          : "Number",
+        "Default"                       : "2",
+        "Description"                   : "Minimum size of the autoscale group."
+    },
+    "Email" : {
+        "Type"                          : "String",
+        "Default"                       : "admins@cloud.com",
+        "AllowedPattern"                : "[-a-z0-9]*\\@[-a-z0-9]*\\.[a-z]*",
+        "Description"                   : "Where alarms should be sent."
+    }
+  },
+
+  "Mappings" : {
+
+    "RegionMap": {
+        "us-east-1"                     : { "HVM"  : "ami-0b33d91d",
+                                            "PV"   : "ami-7a3dd76c"
+                                          },
+        "eu-west-1"                     : { "HVM"  : "ami-70edb016",
+                                            "PV"   : "ami-e0f2af86"
+                                          },
+        "ap-northeast-1"                : { "HVM"  : "ami-56d4ad31",
+                                            "PV"   : "ami-bdd2abda"
+                                          },
+        "us-west-2"                     : { "HVM"  : "ami-f173cc91",
+                                            "PV"   : "ami-8a72cdea"
+                                          }
+    }
+  },
+
+  "Resources" : {
+
+    "elbWeb" : {
+      "Type" : "AWS::ElasticLoadBalancing::LoadBalancer",
+      "Properties" : {
+        "Subnets"                       : { "Ref" : "PublicSubnets"  },
+        "CrossZone"                     : "true",
+        "SecurityGroups"                : { "Ref" : "ELBSecurityGroup"  },
+        "HealthCheck" : 
+        {
+          "HealthyThreshold"            : "2",
+          "Interval"                    : "30",
+          "Target" : {
+            "Fn::Join" : [ "", [ "HTTP", ":", "80", { "Ref" : "HealthTarget" } ] ]
+          },
+          "Timeout"                     : "5",
+          "UnhealthyThreshold"          : "2"
+        },
+        "Listeners" : [
+        {
+          "InstancePort"                : "80",
+          "InstanceProtocol"            : "HTTP",
+          "LoadBalancerPort"            : "443",
+          "Protocol"                    : "HTTPS",
+          "SSLCertificateId"            : { "Ref" : "SSLCertARN" }
+        },
+        {
+          "InstancePort"                : "8080",
+          "InstanceProtocol"            : "HTTP",
+          "LoadBalancerPort"            : "80",
+          "Protocol"                    : "HTTP"
+        } ]
+      }
+    },
+
+    "snsASTopic" : {
+      "Type" : "AWS::SNS::Topic",
+      "Properties" : {
+        "TopicName"                     : { "Fn::Join" : ["-", [ { "Ref" : "AWS::StackName"}, "elb-scaling" ] ] },
+        "Subscription"                  : [
+          {
+          "Endpoint"                    : { "Ref" : "Email" },
+          "Protocol"                    : "email"
+          }
+        ]
+      }
+    },
+
+    "alcServerlaunch" : {
+      "Type" : "AWS::AutoScaling::LaunchConfiguration",
+      "Metadata" : {
+        "AWS::CloudFormation::Init" : {
+          "config" : {
+            "files" : {
+              "/etc/cfn/cfn-hup.conf" : {
+                "content" : { "Fn::Join" : [ "", [
+                  "[main]\n",
+                  "stack=", { "Ref" : "AWS::StackId" }, "\n",
+                  "region=", { "Ref" : "AWS::Region" }, "\n"
+                ] ] },
+                "mode"    : "000400",
+                "owner"   : "root",
+                "group"   : "root"
+              },
+              "/etc/cfn/hooks.d/cfn-auto-reloader.conf" : {
+                "content": { "Fn::Join" : [ "", [
+                  "[cfn-auto-reloader-hook]\n",
+                  "triggers=post.update\n",
+                  "path=Resources.alcServerlaunch.Metadata.AWS::CloudFormation::Init\n",
+                  "action=/opt/aws/bin/cfn-init -v ",
+                  " --stack ", { "Ref" : "AWS::StackName" },
+                  " --resource alcServerlaunch ",
+                  " --region ", { "Ref" : "AWS::Region" }, "\n",
+                  "runas=root\n"
+                ] ] },
+                "mode"    : "000400",
+                "owner"   : "root",
+                "group"   : "root"
+              },
+              "/tmp/first-boot1.json": {
+                "content": {
+                  "run_list": {
+                  },
+                "mode": "000644",
+                "owner": "root",
+                "group": "root"
+                }
+              }
+            },
+            "services" : {
+              "sysvinit" : {
+                "cfn-hup" : {
+                  "enabled" : "true",
+                  "ensureRunning" : "true",
+                  "files" : [ "/etc/cfn/cfn-hup.conf", "/etc/cfn/hooks.d/cfn-auto-reloader.conf" ]
+            } } }
+          }
+        }
+      },
+      "Properties" : {
+        "ImageId"                       : { "Fn::FindInMap" : [ "RegionMap", { "Ref" : "AWS::Region" }, "HVM" ] },
+        "KeyName"                       : { "Ref" : "InstanceKeys" },
+        "InstanceType"                  : { "Ref" : "InstanceType" },
+        "SecurityGroups"                : [ { "Ref" : "CommonSecurityGroup" } ],
+        "AssociatePublicIpAddress"	: "false",
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Join" : [ "",
+            [ "#!/bin/bash -ex\n",
+              "yum update -y aws-cfn-bootstrap\n",
+              "yum update -y\n",
+              "# Send a success signal.\n",
+              "/opt/aws/bin/cfn-signal -e 0 --stack ", { "Ref": "AWS::StackName" }, " --resource asgServergroup\n" ]
+            ]
+          }
+        }
+      }
+    },
+    "asgServergroup" : {
+      "Type" : "AWS::AutoScaling::AutoScalingGroup",
+      "DependsOn" : [ "snsASTopic", "elbWeb" ],
+      "Properties" : {
+        "AvailabilityZones"             : { "Ref" : "AvailZones" },
+        "VPCZoneIdentifier"             : { "Ref" : "PrivateSubnets" },
+        "Cooldown"                      : "300",
+        "DesiredCapacity"               : { "Ref" : "DesiredCapacity" },
+        "MaxSize"                       : { "Ref" : "MaxSize" },
+        "MinSize"                       : { "Ref" : "MinSize" },
+        "HealthCheckType"               : "EC2",
+        "HealthCheckGracePeriod"        : "0",
+        "LaunchConfigurationName"       : { "Ref" : "alcServerlaunch" },
+        "LoadBalancerNames"             : [ { "Ref" : "elbWeb" } ],
+        "NotificationConfiguration" : {
+          "TopicARN"          : { "Ref" : "snsASTopic" },
+          "NotificationTypes" : [ 
+             "autoscaling:EC2_INSTANCE_LAUNCH",
+             "autoscaling:EC2_INSTANCE_LAUNCH_ERROR",
+             "autoscaling:EC2_INSTANCE_TERMINATE",
+             "autoscaling:EC2_INSTANCE_TERMINATE_ERROR"
+          ] 
+        }
+      },
+      "UpdatePolicy" : {
+        "AutoScalingRollingUpdate" : {
+          "MinInstancesInService"	: { "Ref" : "MinSize" }, 
+          "MaxBatchSize"		: "2",
+          "PauseTime"			: "PT2M",
+          "WaitOnResourceSignals"	: "true"
+        }
+      }
+    },
+
+    "aspServerscaleUP" : {
+      "Type" : "AWS::AutoScaling::ScalingPolicy",
+      "DependsOn" : [ "asgServergroup" ],
+      "Properties" : {
+      "AdjustmentType"                  : "ChangeInCapacity",
+      "AutoScalingGroupName"            : { "Ref" : "asgServergroup" },
+      "Cooldown"                        : "300",
+      "ScalingAdjustment"               : "2"
+      }
+    },
+    "aspServerscaleDN" : {
+      "Type" : "AWS::AutoScaling::ScalingPolicy",
+      "DependsOn" : [ "asgServergroup" ],
+      "Properties" : {
+      "AdjustmentType"                  : "ChangeInCapacity",
+      "AutoScalingGroupName"            : { "Ref" : "asgServergroup" },
+      "ScalingAdjustment"               : "-2"
+      }
+    },
+
+    "monServeralarmLow" : {
+      "Type" : "AWS::CloudWatch::Alarm",
+      "DependsOn" : [ "asgServergroup", "aspServerscaleDN" ],
+      "Properties" : {
+      "MetricName"                      : "RequestCount",
+      "Namespace"                       : "AWS/ELB",
+      "Statistic"                       : "Sum",
+      "Period"                          : "60",
+      "EvaluationPeriods"               : "4",
+      "Threshold"                       : { "Ref" : "Threshold" },
+      "AlarmActions"                    : [ { "Ref" : "aspServerscaleDN" } ],
+      "Dimensions"                      : [ { "Name": "AutoScalingGroupName", "Value": { "Ref": "asgServergroup" } } ],
+      "ComparisonOperator"              : "LessThanThreshold"
+      }
+    },
+    "monServeralarmHigh" : {
+      "Type" : "AWS::CloudWatch::Alarm",
+      "DependsOn" : [ "asgServergroup", "aspServerscaleUP" ],
+      "Properties" : {
+      "MetricName"                      : "RequestCount",
+      "Namespace"                       : "AWS/ELB",
+      "Statistic"                       : "Sum",
+      "Period"                          : "60",
+      "EvaluationPeriods"               : "1",
+      "Threshold"                       : { "Ref" : "Threshold" },
+      "AlarmActions"                    : [ { "Ref" : "aspServerscaleUP" } ],
+      "Dimensions"                      : [ { "Name": "AutoScalingGroupName", "Value": { "Ref": "asgServergroup" } } ],
+      "ComparisonOperator"              : "GreaterThanOrEqualToThreshold"
+      }
+    }
+  },
+
+  "Outputs" : {
+    "URL" : {
+      "Description" : "ELB external URL.",
+      "Value" :  { "Fn::Join" : [ "", [ "https://", { "Fn::GetAtt" : [ "elbWeb", "DNSName" ] } ] ] }
+    },
+    "asGroupName" : {
+      "Description"                     : "Autoscale group name",
+      "Value"                           : { "Ref" : "asgServergroup" }
+    },
+    "snsTopic" : {
+      "Description"                     : "SNS Topic ARN",
+      "Value"                           : { "Ref" : "snsASTopic" }
+    }
+  }
+}
