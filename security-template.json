@@ -1,0 +1,167 @@
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
+  "Description" : "Security group template.",
+
+  "Metadata" : {
+    "AWS::CloudFormation::Interface" : {
+    "ParameterGroups" : [
+      {
+        "Label"                         : { "default" : "VPC Config" },
+        "Parameters"                    : [ "VPCId", "PermitCIDR" ]
+      }
+    ],
+    "ParameterLabels" : {
+        "VPCId"       		        : { "default" : "The VPC Id" },
+        "PermitCIDR"                    : { "default" : "Permitted CIDR" }
+      }
+    }
+  },
+
+  "Parameters" : {
+
+    "VPCId" : {
+        "Type"                          : "AWS::EC2::VPC::Id",
+        "Description"                   : "Your VPC Id."
+    },
+    "PermitCIDR" : {
+        "Type"                          : "String",
+        "Default"                       : "0.0.0.0/0",
+        "Description"                   : "Enter the CIDR or IP address to permit SSH from. (Note: Used to create a bastion security group.)",
+        "AllowedPattern"                : "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+        "ConstraintDescription"         : "Please enter a valid IP CIDR range of the form x.x.x.x/x."
+    }
+  },
+
+  "Resources" : {
+
+    "ec2ELBSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+        "Properties" : {
+          "GroupDescription"            : "ELB security group",
+          "VpcId"                       : { "Ref" : "VPCId" },
+        "Tags": [
+          { "Key": "Name", "Value": "elb" }
+        ],
+        "SecurityGroupIngress" : [
+          { "IpProtocol" : "tcp", "FromPort" : "80",  "ToPort" : "80",  "CidrIp" : "0.0.0.0/0" },
+          { "IpProtocol" : "tcp", "FromPort" : "443", "ToPort" : "443", "CidrIp" : "0.0.0.0/0" }
+        ]
+      }      
+    },  
+  
+    "ec2BastionSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+        "Properties" : {
+          "GroupDescription"            : "Bastion security group",
+          "VpcId"                       : { "Ref" : "VPCId" },
+        "Tags": [
+          { "Key": "Name", "Value": "bastion" }
+        ],
+        "SecurityGroupIngress" : [
+          {
+          "IpProtocol"			: "tcp",
+          "FromPort"			: "22",
+          "ToPort"			: "22",
+          "CidrIp"			: { "Ref" : "PermitCIDR" }
+          }
+        ]
+      }      
+    },
+
+    "ec2CommonSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "DependsOn" : [ "ec2ELBSecurityGroup", "ec2BastionSecurityGroup" ],
+        "Properties" : {
+          "GroupDescription"            : "Common security group",
+          "VpcId"                       : { "Ref" : "VPCId" },
+        "Tags": [
+          { "Key": "Name", "Value": "common" }
+        ],
+        "SecurityGroupIngress" : [
+          {
+          "IpProtocol"                  : "tcp",
+          "FromPort"                    : "80",
+          "ToPort"                      : "80",
+          "SourceSecurityGroupId"       : { "Ref" : "ec2ELBSecurityGroup"}
+          },
+          {
+          "IpProtocol"                  : "tcp",
+          "FromPort"                    : "8082",
+          "ToPort"                      : "8082",
+          "SourceSecurityGroupId"       : { "Ref" : "ec2ELBSecurityGroup"}
+          },
+          {
+          "IpProtocol"                  : "tcp",
+          "FromPort"                    : "22",
+          "ToPort"                      : "22",
+          "SourceSecurityGroupId"       : { "Ref" : "ec2BastionSecurityGroup"}
+          }
+        ]
+      }      
+    },
+
+    "ec2CacheSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "DependsOn" : [ "ec2CommonSecurityGroup" ],
+        "Properties" : {
+          "GroupDescription"            : "ElastiCache security group",
+          "VpcId"                       : { "Ref" : "VPCId" },
+        "Tags": [
+          { "Key": "Name", "Value": "cache" }
+        ],
+        "SecurityGroupIngress" : [
+          {
+          "IpProtocol"                  : "tcp",
+          "FromPort"                    : "11211",
+          "ToPort"                      : "11211",
+          "SourceSecurityGroupId"       : { "Ref" : "ec2CommonSecurityGroup"}
+          }
+        ]
+      }      
+    },  
+
+    "ec2RDSSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "DependsOn" : [ "ec2CommonSecurityGroup" ],
+        "Properties" : {
+          "GroupDescription"            : "RDS replica security group",
+          "VpcId"                       : { "Ref" : "VPCId" },
+        "Tags": [
+          { "Key": "Name", "Value": "rds-replica" }
+        ],
+        "SecurityGroupIngress" : [
+          {
+          "IpProtocol"                  : "tcp",
+          "FromPort"                    : "3306",
+          "ToPort"                      : "3306",
+          "SourceSecurityGroupId"       : { "Ref" : "ec2CommonSecurityGroup"}
+          }
+        ]
+      }      
+    }  
+  },
+
+  "Outputs" : {
+
+    "ELBSecurityGroup" : {
+      "Description"                     : "ELB security group.",
+      "Value"                           : { "Ref" : "ec2ELBSecurityGroup" }
+    },
+    "BastionSecurityGroup" : {
+      "Description"                     : "Bastion security group.",
+      "Value"                           : { "Ref" : "ec2BastionSecurityGroup" }
+    },
+    "CommonSecurityGroup" : {
+      "Description"                     : "Instance security group.",
+      "Value"                           : { "Ref" : "ec2CommonSecurityGroup" }
+    },
+    "CacheSecurityGroup" : {
+      "Description"                     : "ElastiCache security group.",
+      "Value"                           : { "Ref" : "ec2CacheSecurityGroup" }
+    },
+    "RDSSecurityGroup" : {
+      "Description"                     : "RDS security group.",
+      "Value"                           : { "Ref" : "ec2RDSSecurityGroup" }
+    }
+  }
+}
