@@ -41,3 +41,12 @@ security-template.json	| Creates all the needed security groups for each service
 vpc-template.json	| Creates the VPC and all it's resources
 wrapper-template.json	| Used to build the entire site from scratch
 
+Regions currently supported:
+
+* N. Virginia (us-east-1)
+* Oregon (us-west-2)
+* Ireland (eu-west-1)
+* Tokyo (ap-northeast-1)
+
+Note: Update template "Mappings" to add more regions.
+
