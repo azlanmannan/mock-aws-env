@@ -30,4 +30,14 @@ Each VPC contains the following resources.
 
 ## CloudFormation Templates
 
+Template | Purpose
+-------- | --------
+bastion-template.json	| Launches a Bastion host into the public subnet in availability-zone 1
+cache-template.json	| Launches the Cache node cluster
+elb-template.json	| Deploys a Load Balancer and Autoscale group
+rds-master-template.json	| Creates the master mySQL database (Note: Not launched by the wrapper template)
+rds-replica-template.json	| Creates a mySQL read-replica node
+security-template.json	| Creates all the needed security groups for each service
+vpc-template.json	| Creates the VPC and all it's resources
+wrapper-template.json	| Used to build the entire site from scratch
 
