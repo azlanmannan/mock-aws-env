@@ -28,6 +28,17 @@ Each VPC contains the following resources.
 * One read-replica Db node (The master should be located in another region.)
 * One bastion host for remote access and management
 
+**Security**
+
+* The ELB security group (443, 80) permits all traffic.
+* The Bastion security group (22) permits your admin CIDR.
+* The Common security group applied to the instances permits traffic (80, 8082) from the ELB security group.
+* The Cache security group (11211) and RDS security group (3306) permit connections from the Common security group.
+
+**Autoscale**
+
+At a minimum, the Autoscale policy will keep 2 instances running, 1 in each availability zone, at all times.  Autoscale will scale up by adding an instance in each availability zone after exceeding the total connection count threshold for 1 evaluation period.  The policy will scale down after the connection count drops below the threshold for 4 evaluation periods.
+
 ## CloudFormation Templates
 
 Template | Purpose
