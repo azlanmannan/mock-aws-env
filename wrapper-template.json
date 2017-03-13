@@ -174,7 +174,7 @@
     "VPC" : {
       "Type" : "AWS::CloudFormation::Stack",
       "Properties" : {
-        "TemplateURL" : "https://s3.amazonaws.com/cloud-templates-1/vpc-template.json",
+        "TemplateURL" : "https://s3-us-west-2.amazonaws.com/toddm92/public/templates/cfn/mock/vpc-template.json",
         "Parameters" : {
           "OwnerService": { "Ref" : "OwnerService" },
           "StackEnv": { "Ref" : "StackEnv" }
@@ -186,7 +186,7 @@
       "Type" : "AWS::CloudFormation::Stack",
       "DependsOn" : [ "VPC" ],
       "Properties" : {
-        "TemplateURL" : "https://s3.amazonaws.com/cloud-templates-1/security-template.json",
+        "TemplateURL" : "https://s3-us-west-2.amazonaws.com/toddm92/public/templates/cfn/mock/security-template.json",
         "Parameters" : {
           "VPCId" : { "Fn::GetAtt" : ["VPC", "Outputs.VPCId"] },
           "PermitCIDR" : { "Ref" : "PermitCIDR" }
@@ -198,7 +198,7 @@
       "Type" : "AWS::CloudFormation::Stack",
       "DependsOn" : [ "VPC", "Security" ],
       "Properties" : {
-        "TemplateURL" : "https://s3.amazonaws.com/cloud-templates-1/elb-template.json",
+        "TemplateURL" : "https://s3-us-west-2.amazonaws.com/toddm92/public/templates/cfn/mock/elb-template.json",
         "Parameters" : {
           "HealthTarget" : { "Ref" : "HealthTarget" },
           "SSLCertARN" : { "Ref" : "SSLCertARN" },
@@ -228,7 +228,7 @@
       "Type" : "AWS::CloudFormation::Stack",
       "DependsOn" : [ "VPC", "Security" ],
       "Properties" : {
-        "TemplateURL" : "https://s3.amazonaws.com/cloud-templates-1/cache-template.json",
+        "TemplateURL" : "https://s3-us-west-2.amazonaws.com/toddm92/public/templates/cfn/mock/cache-template.json",
         "Parameters" : {
           "CacheNodeType" : { "Ref" : "CacheNodeType" },
           "NumberOfCacheNodes" : { "Ref" : "NumberOfCacheNodes" },
@@ -244,7 +244,7 @@
       "Type" : "AWS::CloudFormation::Stack",
       "DependsOn" : [ "VPC", "Security" ],
       "Properties" : {
-        "TemplateURL" : "https://s3.amazonaws.com/cloud-templates-1/rds-replica-template.json",
+        "TemplateURL" : "https://s3-us-west-2.amazonaws.com/toddm92/public/templates/cfn/mock/rds-replica-template.json",
         "Parameters" : {
           "RDSNodeType" : { "Ref" : "RDSNodeType" },
           "RDSMasterARN" : { "Ref" : "RDSMasterARN" },
@@ -260,7 +260,7 @@
       "Type" : "AWS::CloudFormation::Stack",
       "DependsOn" : [ "VPC", "Security" ],
       "Properties" : {
-        "TemplateURL" : "https://s3.amazonaws.com/cloud-templates-1/bastion-template.json",
+        "TemplateURL" : "https://s3-us-west-2.amazonaws.com/toddm92/public/templates/cfn/mock/bastion-template.json",
         "Parameters" : {
           "BastionInstanceType" : { "Ref" : "BastionInstanceType" },
           "BastionKeys" : { "Ref" : "BastionKeys" },
